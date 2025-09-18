@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { FusePageCarded } from '@fuse';
-import { Card, Button, Typography, Chip, Icon, Box } from '@material-ui/core';
+import { Card, Button, Typography, Chip, Box } from '@material-ui/core';
 import { useMutation, useQuery, useSubscription } from '@apollo/react-hooks';
 import { FixedSizeList as List } from 'react-window';
 import {
@@ -15,20 +15,14 @@ function VehicleGenerationConsole() {
   const [generatedCount, setGeneratedCount] = useState(0);
   const [vehicles, setVehicles] = useState([]);
 
-  // Performance optimization refs
   const lastRenderTimeRef = useRef(Date.now());
   const vehiclesRef = useRef([]);
-  const shouldRenderRef = useRef(true);
 
-  // GraphQL hooks
   const [startGeneration] = useMutation(GeneratorStartGeneration);
   const [stopGeneration] = useMutation(GeneratorStopGeneration);
-  const { data: statusData } = useQuery(GeneratorGenerationStatus, { 
-    pollInterval: 1000 
-  });
+  const { data: statusData } = useQuery(GeneratorGenerationStatus, { pollInterval: 1000 });
   const { data: subscriptionData } = useSubscription(onGeneratorVehicleGenerated);
 
-  // Throttling render to max once per second
   const shouldRender = useCallback(() => {
     const now = Date.now();
     if (now - lastRenderTimeRef.current >= 1000) {
@@ -38,29 +32,37 @@ function VehicleGenerationConsole() {
     return false;
   }, []);
 
-  // Handle start generation
+  // Memoized VirtualizedList component to control re-renders
+  const VirtualizedList = memo(({ vehicles }) => {
+    console.log('🔄 VirtualizedList re-rendered at:', new Date().toISOString(), 'with', vehicles.length, 'vehicles');
+    
+    if (vehicles.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-96 text-gray-500">
+          <Typography variant="body1">No hay vehículos generados aún. Haz clic en "Iniciar Simulación" para comenzar.</Typography>
+        </div>
+      );
+    }
+
+    return (
+      <List height={400} itemCount={vehicles.length} itemSize={42} width={'100%'}>
+        {({ index, style }) => <VehicleRow index={index} style={style} vehicles={vehicles} />}
+      </List>
+    );
+  });
+
   const handleStartGeneration = async () => {
-    try {
-      await startGeneration();
-      setIsGenerating(true);
-      setGeneratedCount(0);
-      setVehicles([]); // Clear previous vehicles
-    } catch (error) {
-      console.error('Error starting generation:', error);
-    }
+    await startGeneration();
+    setIsGenerating(true);
+    setGeneratedCount(0);
+    setVehicles([]);
   };
 
-  // Handle stop generation
   const handleStopGeneration = async () => {
-    try {
-      await stopGeneration();
-      setIsGenerating(false);
-    } catch (error) {
-      console.error('Error stopping generation:', error);
-    }
+    await stopGeneration();
+    setIsGenerating(false);
   };
 
-  // Update status from backend
   useEffect(() => {
     if (statusData && statusData.GeneratorGenerationStatus) {
       setIsGenerating(statusData.GeneratorGenerationStatus.isGenerating);
@@ -68,148 +70,100 @@ function VehicleGenerationConsole() {
     }
   }, [statusData]);
 
-  // Handle new vehicle from WebSocket/Subscription
   useEffect(() => {
     if (subscriptionData && subscriptionData.GeneratorVehicleGenerated) {
-      const newVehicle = subscriptionData.GeneratorVehicleGenerated.data;
-      setGeneratedCount(subscriptionData.GeneratorVehicleGenerated.generatedCount);
+      const evt = subscriptionData.GeneratorVehicleGenerated;
+      const vehicleData = evt.data;
+      
+      // Always update the counter (this is lightweight)
+      setGeneratedCount(evt.generatedCount || 0);
 
-      // Only update vehicles list if should render (throttling)
+      // Create the new vehicle object
+      const newVehicle = {
+        id: evt.aid,
+        year: vehicleData.year,
+        type: vehicleData.type,
+        hp: vehicleData.hp,
+        topSpeed: vehicleData.topSpeed,
+        powerSource: vehicleData.powerSource,
+        timestamp: evt.timestamp
+      };
+
+      // Always update the ref (for immediate access)
+      setVehicles(prev => {
+        const updated = [newVehicle, ...prev].slice(0, 1000);
+        vehiclesRef.current = updated;
+        return updated;
+      });
+
+      // Only trigger UI re-render if enough time has passed
       if (shouldRender()) {
-        setVehicles(prev => {
-          const updated = [{ ...newVehicle, id: newVehicle.aid }, ...prev].slice(0, 1000);
-          vehiclesRef.current = updated;
-          return updated;
-        });
+        console.log('⏰ UI re-render triggered at:', new Date().toISOString());
+        // Force re-render by updating state
+        setVehicles(prev => [...prev]);
       } else {
-        // Update ref without triggering re-render
-        setVehicles(prev => {
-          const updated = [{ ...newVehicle, id: newVehicle.aid }, ...prev].slice(0, 1000);
-          vehiclesRef.current = updated;
-          return prev; // Don't trigger re-render
-        });
+        console.log('⏸️ UI re-render skipped (throttled)');
       }
     }
   }, [subscriptionData, shouldRender]);
 
-  // Virtualized Row Component
-  const VehicleRow = ({ index, style }) => {
-    const vehicle = vehiclesRef.current[index];
+  // Memoized VehicleRow component to prevent unnecessary re-renders
+  const VehicleRow = memo(({ index, style, vehicles }) => {
+    const vehicle = vehicles[index];
     if (!vehicle) return null;
-
     return (
-      <div style={style} className="flex items-center border-b border-gray-200 px-4 py-2">
-        <div className="flex-1 text-sm">{vehicle.data.year}</div>
-        <div className="flex-1 text-sm">{vehicle.data.type}</div>
-        <div className="flex-1 text-sm">{vehicle.data.hp} HP</div>
-        <div className="flex-1 text-sm">{vehicle.data.topSpeed} km/h</div>
+      <div style={style} className="flex items-center border-b border-gray-200 px-4 py-2 hover:bg-gray-50">
+        <div className="flex-1 text-sm font-medium">{vehicle.year}</div>
+        <div className="flex-1 text-sm">{vehicle.type}</div>
+        <div className="flex-1 text-sm">{vehicle.hp}</div>
+        <div className="flex-1 text-sm">{vehicle.topSpeed}</div>
         <div className="flex-1 text-sm">
           <Chip 
-            label={vehicle.data.powerSource} 
+            label={vehicle.powerSource} 
             size="small" 
-            color={vehicle.data.powerSource === 'Electric' ? 'primary' : 
-                   vehicle.data.powerSource === 'Hybrid' ? 'secondary' : 'default'}
+            color={vehicle.powerSource === 'Electric' ? 'primary' : 'default'}
           />
         </div>
-        <div className="flex-1 text-xs text-gray-500">
-          {vehicle.aid.substring(0, 8)}...
-        </div>
+        <div className="flex-1 text-xs text-gray-500 font-mono">{vehicle.id ? vehicle.id.substring(0, 8) + '...' : ''}</div>
       </div>
     );
-  };
+  });
 
   return (
     <FusePageCarded
       header={
-        <div className="flex flex-col sm:flex-row space-y-16 sm:space-y-0 flex-1 w-full items-center justify-between py-32 px-24 md:px-32">
-          <Typography
-            component={Box}
-            variant="h4"
-            className="flex items-center sm:mb-0"
-          >
-            <Icon className="text-32 mr-12">directions_car</Icon>
-            Generador de Flota Vehicular
-          </Typography>
-          
-          <div className="flex items-center space-x-16">
-            <div className="flex items-center space-x-8">
-              <Chip
-                icon={<Icon>{isGenerating ? 'play_arrow' : 'pause'}</Icon>}
-                label={isGenerating ? 'Corriendo...' : 'Detenido'}
-                color={isGenerating ? 'primary' : 'default'}
-                variant="outlined"
-              />
-              <Typography variant="body1">
-                Vehículos Generados: <strong>{generatedCount}</strong>
-              </Typography>
-            </div>
-            
-            <div className="flex space-x-8">
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleStartGeneration}
-                disabled={isGenerating}
-                startIcon={<Icon>play_arrow</Icon>}
-              >
-                Iniciar Simulación
-              </Button>
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={handleStopGeneration}
-                disabled={!isGenerating}
-                startIcon={<Icon>stop</Icon>}
-              >
-                Detener Simulación
-              </Button>
-            </div>
-          </div>
+        <div className="p-24">
+          <Typography variant="h6">Generador de Flota Vehicular</Typography>
+          <Box display="flex" alignItems="center" mt={1}>
+            <Button color="primary" variant="contained" onClick={handleStartGeneration} style={{ marginRight: 8 }}>Iniciar Simulación</Button>
+            <Button color="secondary" variant="outlined" onClick={handleStopGeneration}>Detener Simulación</Button>
+            <Chip label={isGenerating ? 'Corriendo...' : 'Detenido'} style={{ marginLeft: 12 }} />
+            <Chip label={`Vehículos Generados: ${generatedCount}`} style={{ marginLeft: 12 }} />
+          </Box>
         </div>
       }
       content={
-        <div className="p-24">
-          <Card className="w-full">
-            <div className="p-24">
-              <Typography variant="h6" className="mb-16">
-                Vehículos Generados en Tiempo Real
-              </Typography>
-              
-              {/* Table Header */}
-              <div className="flex items-center border-b-2 border-gray-300 px-4 py-3 font-semibold text-gray-700">
-                <div className="flex-1">Año</div>
-                <div className="flex-1">Tipo</div>
-                <div className="flex-1">Potencia (HP)</div>
-                <div className="flex-1">Vel. Máxima (km/h)</div>
-                <div className="flex-1">Power Source</div>
-                <div className="flex-1">AID</div>
-              </div>
-              
-              {/* Virtualized List */}
-              <div className="border border-gray-200 rounded">
-                {vehiclesRef.current.length > 0 ? (
-                  <List
-                    height={400}
-                    itemCount={vehiclesRef.current.length}
-                    itemSize={50}
-                    width="100%"
-                  >
-                    {VehicleRow}
-                  </List>
-                ) : (
-                  <div className="flex items-center justify-center h-96 text-gray-500">
-                    <Typography variant="body1">
-                      {isGenerating ? 'Generando vehículos...' : 'Presiona "Iniciar Simulación" para comenzar'}
-                    </Typography>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
+        <Card className="m-24 p-16">
+          <Typography variant="subtitle1" className="mb-12">Vehículos Generados en Tiempo Real</Typography>
+          
+          {/* Table Header */}
+          <div className="flex items-center border-b-2 border-gray-300 px-4 py-3 bg-gray-50 font-semibold">
+            <div className="flex-1 text-sm">Año</div>
+            <div className="flex-1 text-sm">Tipo</div>
+            <div className="flex-1 text-sm">Potencia (HP)</div>
+            <div className="flex-1 text-sm">Vel. Máxima (km/h)</div>
+            <div className="flex-1 text-sm">Power Source</div>
+            <div className="flex-1 text-sm">ID</div>
+          </div>
+          
+          {/* Virtualized List - Memoized to control re-renders */}
+          <VirtualizedList vehicles={vehicles} />
+        </Card>
       }
     />
   );
 }
 
 export default VehicleGenerationConsole;
+
+

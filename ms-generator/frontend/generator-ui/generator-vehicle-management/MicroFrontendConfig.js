@@ -20,7 +20,7 @@ export const MicroFrontendConfig = {
         },
         {
             path: '/vehicle-mng/generation',
-            component: React.lazy(() => import('./vehicle-generation/VehicleGenerationSimple'))
+            component: React.lazy(() => import('./vehicle-generation/VehicleGenerationConsole'))
         },
         {
             path: '/vehicle-mng',
@@ -37,7 +37,7 @@ export const MicroFrontendConfig = {
                 'id': 'generator-vehicle-management',
                 'type': 'item',
                 'icon': 'business',
-                'url': '/vehicle-mng/vehicles',
+                'url': '/vehicle-mng',
                 'priority': 2000,
                 auth
             }, {

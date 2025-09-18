@@ -76,9 +76,6 @@ module.exports = {
         },
         GeneratorVehicle(root, args, context) {
             return sendToBackEndHandler$(root, args, context, READ_ROLES, 'query', 'Vehicle', 'GeneratorVehicle').toPromise();
-        },
-        GeneratorGenerationStatus(root, args, context) {
-            return sendToBackEndHandler$(root, args, context, READ_ROLES, 'query', 'Vehicle', 'GeneratorGenerationStatus').toPromise();
         }
     },
 
@@ -92,12 +89,6 @@ module.exports = {
         },
         GeneratorDeleteVehicles(root, args, context) {
             return sendToBackEndHandler$(root, args, context, WRITE_ROLES, 'mutation', 'Vehicle', 'GeneratorDeleteVehicles').toPromise();
-        },
-        GeneratorStartGeneration(root, args, context) {
-            return sendToBackEndHandler$(root, args, context, WRITE_ROLES, 'mutation', 'Vehicle', 'GeneratorStartGeneration').toPromise();
-        },
-        GeneratorStopGeneration(root, args, context) {
-            return sendToBackEndHandler$(root, args, context, WRITE_ROLES, 'mutation', 'Vehicle', 'GeneratorStopGeneration').toPromise();
         },
     },
 
@@ -123,25 +114,6 @@ module.exports = {
                         : false;
                 }
             )
-        },
-        GeneratorVehicleGenerated: {
-            subscribe: withFilter(
-                (payload, variables, context, info) => {
-                    //Checks the roles of the user, if the user does not have at least one of the required roles, an error will be thrown
-                    RoleValidator.checkAndThrowError(
-                        context.authToken.realm_access.roles,
-                        READ_ROLES,
-                        "Generator",
-                        "GeneratorVehicleGenerated",
-                        PERMISSION_DENIED_ERROR_CODE,
-                        "Permission denied"
-                    );
-                    return pubsub.asyncIterator("GeneratorVehicleGenerated");
-                },
-                (payload, variables, context, info) => {
-                    return payload ? true : false;
-                }
-            )
         }
     }
 };
@@ -158,15 +130,6 @@ const eventDescriptors = [
             console.log(`Error processing ${descriptor.backendEventName}`), // OPTIONAL, only use if needed
         onEvent: (evt, descriptor) =>
             console.log(`Event of type  ${descriptor.backendEventName} arrived`) // OPTIONAL, only use if needed
-    },
-    {
-        backendEventName: "VehicleGenerated",
-        gqlSubscriptionName: "GeneratorVehicleGenerated",
-        dataExtractor: evt => evt.data,
-        onError: (error, descriptor) =>
-            console.log(`Error processing ${descriptor.backendEventName}`),
-        onEvent: (evt, descriptor) =>
-            console.log(`Event of type ${descriptor.backendEventName} arrived`),
     }
 ];
 

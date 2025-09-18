@@ -1,47 +1,3 @@
-type Query {
-  OrganizationMngOrganizationListing(
-    filterInput: OrganizationFilterInput
-    paginationInput: OrganizationPaginationInput
-    sortInput: OrganizationSortInput
-  ): OrganizationMngOrganizationListingResult!
-  "Get Vehicles filtered "
-  GeneratorVehicleListing(filterInput: GeneratorVehicleFilterInput, paginationInput: GeneratorVehiclePaginationInput, sortInput: GeneratorVehicleSortInput): GeneratorVehicleListing
-  "Get Vehicle by its id"
-  GeneratorVehicle(id: ID!, organizationId: String!): GeneratorVehicle
-}
-
-input OrganizationFilterInput {
-  name: String
-  active: Boolean
-}
-
-input OrganizationPaginationInput {
-  page: Int!
-  count: Int!
-  queryTotalResultCount: Boolean
-}
-
-input OrganizationSortInput {
-  field: String!
-  asc: Boolean!
-}
-
-type OrganizationMngOrganizationListingResult {
-  organizations: [Organization!]
-  totalCount: Int!
-  hasNextPage: Boolean!
-}
-
-
-type Organization {
-  id: ID
-  _id: ID
-  name: String!
-  logoUrl: String
-  active: Boolean
-  attributes: String
-}
-
 type CommandResponse {
   "Response code"
   code: Int
@@ -71,12 +27,52 @@ type GeneratorVehicleMetadata {
 		updatedAt: BigInt
 }
 
+# Status of the generation process
+type GeneratorGenerationStatus {
+  "Is generation currently running"
+  isGenerating: Boolean!
+  "Total number of vehicles generated"
+  generatedCount: Int!
+  "Current status"
+  status: String!
+}
+
+# Payload for a generated vehicle event
+type GeneratorVehicleData {
+  "Vehicle type"
+  type: String!
+  "Power source"
+  powerSource: String!
+  "Horsepower"
+  hp: Int!
+  "Year"
+  year: Int!
+  "Top speed"
+  topSpeed: Int!
+}
+
+type GeneratorVehicleGenerated {
+  "Event type"
+  at: String!
+  "Event subtype"
+  et: String!
+  "Deterministic ID"
+  aid: String!
+  "Timestamp"
+  timestamp: String!
+  "Vehicle data"
+  data: GeneratorVehicleData!
+  "Total generated count"
+  generatedCount: Int!
+}
+
 type GeneratorVehicleListing {
   "Listing"
   listing: [GeneratorVehicle]
   "query total result count"
   queryTotalResultCount: Int,  
 }
+
 
 input GeneratorVehicleFilterInput {
   "Name"
@@ -112,6 +108,16 @@ input GeneratorVehicleInput {
   active: Boolean
 }
 
+
+type Query {
+  "Get Vehicles filtered "
+  GeneratorVehicleListing(filterInput: GeneratorVehicleFilterInput, paginationInput: GeneratorVehiclePaginationInput, sortInput: GeneratorVehicleSortInput): GeneratorVehicleListing
+  "Get Vehicle by its id"
+  GeneratorVehicle(id: ID!, organizationId: String!): GeneratorVehicle
+  "Get generation status"
+  GeneratorGenerationStatus: GeneratorGenerationStatus
+}
+
 type Mutation {
   "Create a new Vehicle"
   GeneratorCreateVehicle(input: GeneratorVehicleInput!): GeneratorVehicle
@@ -119,10 +125,16 @@ type Mutation {
   GeneratorUpdateVehicle(id: ID!, input: GeneratorVehicleInput!, merge: Boolean!): GeneratorVehicle  
   "Deletes an Vehicle"
   GeneratorDeleteVehicles(ids: [ID]!): CommandResponse
+  "Start vehicle generation"
+  GeneratorStartGeneration: CommandResponse
+  "Stop vehicle generation"
+  GeneratorStopGeneration: CommandResponse
 }
 
 
 type Subscription {
   "This events is triggered when a vehicle updated or deleted"
   GeneratorVehicleModified(id: ID!): GeneratorVehicle
+  "This event is triggered when a new vehicle is generated"
+  GeneratorVehicleGenerated: GeneratorVehicleGenerated
 }

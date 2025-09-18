@@ -77,11 +77,9 @@ module.exports = {
         GeneratorVehicle(root, args, context) {
             return sendToBackEndHandler$(root, args, context, READ_ROLES, 'query', 'Vehicle', 'GeneratorVehicle').toPromise();
         },
-        OrganizationMngOrganizationListing: async () => ({
-            data: [],
-            total: 0
-          }),
-        
+        GeneratorGenerationStatus(root, args, context) {
+            return sendToBackEndHandler$(root, args, context, READ_ROLES, 'query', 'Vehicle', 'GeneratorGenerationStatus', 5000).toPromise();
+        }
     },
 
     //// MUTATIONS ///////
@@ -95,6 +93,12 @@ module.exports = {
         GeneratorDeleteVehicles(root, args, context) {
             return sendToBackEndHandler$(root, args, context, WRITE_ROLES, 'mutation', 'Vehicle', 'GeneratorDeleteVehicles').toPromise();
         },
+        GeneratorStartGeneration(root, args, context) {
+            return sendToBackEndHandler$(root, args, context, WRITE_ROLES, 'mutation', 'Vehicle', 'GeneratorStartGeneration', 5000).toPromise();
+        },
+        GeneratorStopGeneration(root, args, context) {
+            return sendToBackEndHandler$(root, args, context, WRITE_ROLES, 'mutation', 'Vehicle', 'GeneratorStopGeneration', 5000).toPromise();
+        },
     },
 
     //// SUBSCRIPTIONS ///////
@@ -102,7 +106,7 @@ module.exports = {
         GeneratorVehicleModified: {
             subscribe: withFilter(
                 (payload, variables, context, info) => {
-                   
+                    //Checks the roles of the user, if the user does not have at least one of the required roles, an error will be thrown
                     RoleValidator.checkAndThrowError(
                         context.authToken.realm_access.roles,
                         READ_ROLES,
@@ -119,6 +123,9 @@ module.exports = {
                         : false;
                 }
             )
+        },
+        GeneratorVehicleGenerated: {
+            subscribe: () => pubsub.asyncIterator('GeneratorVehicleGenerated')
         }
     }
 };
@@ -130,15 +137,17 @@ const eventDescriptors = [
     {
         backendEventName: "GeneratorVehicleModified",
         gqlSubscriptionName: "GeneratorVehicleModified",
-        dataExtractor: evt => evt.data,
+        dataExtractor: evt => evt.data, // OPTIONAL, only use if needed
         onError: (error, descriptor) =>
-            console.log(`Error processing ${descriptor.backendEventName}`), 
+            console.log(`Error processing ${descriptor.backendEventName}`), // OPTIONAL, only use if needed
         onEvent: (evt, descriptor) =>
-            console.log(`Event of type  ${descriptor.backendEventName} arrived`) 
+            console.log(`Event of type  ${descriptor.backendEventName} arrived`) // OPTIONAL, only use if needed
     }
 ];
 
-
+/**
+ * Connects every backend event to the right GQL subscription
+ */
 eventDescriptors.forEach(descriptor => {
     broker.getMaterializedViewsUpdates$([descriptor.backendEventName]).subscribe(
         evt => {
@@ -162,3 +171,27 @@ eventDescriptors.forEach(descriptor => {
         () => console.log(`${descriptor.gqlSubscriptionName} listener STOPED.`)
     );
 });
+
+// Bridge gateway events to GraphQL subscription
+try {
+    broker.getEvents$(['VehicleGenerated']).subscribe(
+        evt => {
+            try {
+                console.log('📡 Received VehicleGenerated event:', evt);
+                // evt.data should be { data: msg, generatedCount }
+                const bridge = evt && evt.data ? evt.data : null;
+                const message = bridge && bridge.data ? bridge.data : null;
+                const generatedCount = bridge && typeof bridge.generatedCount === 'number' ? bridge.generatedCount : undefined;
+                if (message) {
+                    console.log('📤 Publishing to GraphQL subscription:', { ...message, generatedCount });
+                    pubsub.publish('GeneratorVehicleGenerated', { GeneratorVehicleGenerated: { ...message, generatedCount } });
+                }
+            } catch (e) {
+                console.error('Error publishing GeneratorVehicleGenerated to GraphQL', e);
+            }
+        },
+        error => console.error('Error listening VehicleGenerated events', error)
+    );
+} catch (e) {
+    console.error('Error wiring VehicleGenerated events listener', e);
+}

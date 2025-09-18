@@ -2,7 +2,6 @@ export default {
   navigation: {
     'settings': 'Configuraciones',
     'generator-vehicle-management': 'Vehicles',
-    'generator-vehicle-generation': 'Generador de Vehículos',
   },
   vehicles: {
     vehicles: 'Vehicles',
@@ -50,24 +49,5 @@ export default {
         required: "El nombre es requerido",
       }
     },
-  },
-  vehicleGeneration: {
-    title: 'Generador de Flota Vehicular',
-    startSimulation: 'Iniciar Simulación',
-    stopSimulation: 'Detener Simulación',
-    running: 'Corriendo...',
-    stopped: 'Detenido',
-    vehiclesGenerated: 'Vehículos Generados',
-    realTimeVehicles: 'Vehículos Generados en Tiempo Real',
-    generatingVehicles: 'Generando vehículos...',
-    startSimulationPrompt: 'Presiona "Iniciar Simulación" para comenzar',
-    tableHeaders: {
-      year: 'Año',
-      type: 'Tipo',
-      horsepower: 'Potencia (HP)',
-      topSpeed: 'Vel. Máxima (km/h)',
-      powerSource: 'Fuente de Energía',
-      aid: 'AID'
-    }
   }
 };
