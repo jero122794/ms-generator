@@ -1,0 +1,16 @@
+[
+  {
+    "name": "generator-vehicle-management",
+    "src": "frontend/generator-ui/generator-vehicle-management",
+    "assets": "frontend/generator-ui/generator-vehicle-management/assets/generator-vehicle-management",
+    "prebuildCommands": [],
+    "environmentVars": {
+      "_env": {
+      },
+      "_env_local": {
+      },
+      "_env_production": {
+      }
+    }
+  }
+]

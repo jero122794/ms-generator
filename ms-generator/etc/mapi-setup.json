@@ -1,0 +1,8 @@
+[
+    {
+        "name": "generator-vehicle-management",
+        "type": "graphql",        
+        "src": "api/generator-ui-gateway/graphql/generator-vehicle-management",
+        "preBuildCommands": []
+    }
+]
