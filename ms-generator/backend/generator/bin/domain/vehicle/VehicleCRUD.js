@@ -277,11 +277,14 @@ class VehicleCRUD {
     broker.send$(VEHICLE_GENERATION_TOPIC, 'VehicleGenerated', msg).subscribe();
     
     // Publish to WebSocket topic for frontend updates
-    broker.send$(WEBSOCKET_TOPIC, 'VehicleGenerated', {
+    const websocketMsg = {
       type: 'VehicleGenerated',
       data: msg,
       generatedCount: this.generatedCount
-    }).subscribe();
+    };
+    
+    console.log('📤 Backend sending WebSocket message:', websocketMsg);
+    broker.send$(WEBSOCKET_TOPIC, 'VehicleGenerated', websocketMsg).subscribe();
 
     ConsoleLogger.i(`🚗 Vehicle generated: ${aid.substring(0, 8)}... - Total: ${this.generatedCount}`);
   }

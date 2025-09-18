@@ -125,7 +125,17 @@ module.exports = {
             )
         },
         GeneratorVehicleGenerated: {
-            subscribe: () => pubsub.asyncIterator('GeneratorVehicleGenerated')
+            subscribe: withFilter(
+                (payload, variables, context, info) => {
+                    // Skip authentication for subscriptions temporarily
+                    console.log('🔓 Subscription GeneratorVehicleGenerated - skipping auth for testing');
+                    return pubsub.asyncIterator("GeneratorVehicleGenerated");
+                },
+                (payload, variables, context, info) => {
+                    // No specific filtering needed for this subscription
+                    return true;
+                }
+            )
         }
     }
 };

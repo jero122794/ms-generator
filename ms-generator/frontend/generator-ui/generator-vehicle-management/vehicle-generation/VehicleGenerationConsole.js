@@ -21,7 +21,15 @@ function VehicleGenerationConsole() {
   const [startGeneration] = useMutation(GeneratorStartGeneration);
   const [stopGeneration] = useMutation(GeneratorStopGeneration);
   const { data: statusData } = useQuery(GeneratorGenerationStatus, { pollInterval: 1000 });
-  const { data: subscriptionData } = useSubscription(onGeneratorVehicleGenerated);
+  const { data: subscriptionData, loading: subscriptionLoading, error: subscriptionError } = useSubscription(onGeneratorVehicleGenerated);
+
+  // Debug subscription
+  useEffect(() => {
+    console.log('📡 Subscription status:', { subscriptionLoading, subscriptionError, subscriptionData });
+    if (subscriptionError) {
+      console.error('❌ Subscription error:', subscriptionError);
+    }
+  }, [subscriptionLoading, subscriptionError, subscriptionData]);
 
   const shouldRender = useCallback(() => {
     const now = Date.now();
@@ -31,6 +39,28 @@ function VehicleGenerationConsole() {
     }
     return false;
   }, []);
+
+  // Memoized VehicleRow component to prevent unnecessary re-renders
+  const VehicleRow = memo(({ index, style, vehicles }) => {
+    const vehicle = vehicles[index];
+    if (!vehicle) return null;
+    return (
+      <div style={style} className="flex items-center border-b border-gray-200 px-4 py-2 hover:bg-gray-50">
+        <div className="flex-1 text-sm font-medium">{vehicle.year}</div>
+        <div className="flex-1 text-sm">{vehicle.type}</div>
+        <div className="flex-1 text-sm">{vehicle.hp}</div>
+        <div className="flex-1 text-sm">{vehicle.topSpeed}</div>
+        <div className="flex-1 text-sm">
+          <Chip 
+            label={vehicle.powerSource} 
+            size="small" 
+            color={vehicle.powerSource === 'Electric' ? 'primary' : 'default'}
+          />
+        </div>
+        <div className="flex-1 text-xs text-gray-500 font-mono">{vehicle.id ? vehicle.id.substring(0, 8) + '...' : ''}</div>
+      </div>
+    );
+  });
 
   // Memoized VirtualizedList component to control re-renders
   const VirtualizedList = memo(({ vehicles }) => {
@@ -73,9 +103,10 @@ function VehicleGenerationConsole() {
   useEffect(() => {
     if (subscriptionData && subscriptionData.GeneratorVehicleGenerated) {
       const evt = subscriptionData.GeneratorVehicleGenerated;
+      console.log('🔔 Frontend received subscription data:', evt);
       const vehicleData = evt.data;
       
-      // Always update the counter (this is lightweight)
+      // Always update the counter (
       setGeneratedCount(evt.generatedCount || 0);
 
       // Create the new vehicle object
@@ -89,45 +120,16 @@ function VehicleGenerationConsole() {
         timestamp: evt.timestamp
       };
 
-      // Always update the ref (for immediate access)
+      console.log('🚗 New vehicle created:', newVehicle);
+
+      // Update vehicles state directly - remove throttling for now to debug
       setVehicles(prev => {
         const updated = [newVehicle, ...prev].slice(0, 1000);
-        vehiclesRef.current = updated;
+        console.log('📊 Updated vehicles array length:', updated.length);
         return updated;
       });
-
-      // Only trigger UI re-render if enough time has passed
-      if (shouldRender()) {
-        console.log('⏰ UI re-render triggered at:', new Date().toISOString());
-        // Force re-render by updating state
-        setVehicles(prev => [...prev]);
-      } else {
-        console.log('⏸️ UI re-render skipped (throttled)');
-      }
     }
-  }, [subscriptionData, shouldRender]);
-
-  // Memoized VehicleRow component to prevent unnecessary re-renders
-  const VehicleRow = memo(({ index, style, vehicles }) => {
-    const vehicle = vehicles[index];
-    if (!vehicle) return null;
-    return (
-      <div style={style} className="flex items-center border-b border-gray-200 px-4 py-2 hover:bg-gray-50">
-        <div className="flex-1 text-sm font-medium">{vehicle.year}</div>
-        <div className="flex-1 text-sm">{vehicle.type}</div>
-        <div className="flex-1 text-sm">{vehicle.hp}</div>
-        <div className="flex-1 text-sm">{vehicle.topSpeed}</div>
-        <div className="flex-1 text-sm">
-          <Chip 
-            label={vehicle.powerSource} 
-            size="small" 
-            color={vehicle.powerSource === 'Electric' ? 'primary' : 'default'}
-          />
-        </div>
-        <div className="flex-1 text-xs text-gray-500 font-mono">{vehicle.id ? vehicle.id.substring(0, 8) + '...' : ''}</div>
-      </div>
-    );
-  });
+  }, [subscriptionData]);
 
   return (
     <FusePageCarded

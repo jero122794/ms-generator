@@ -1,7 +1,8 @@
 export default {
   navigation: {
     'settings': 'Settings',
-    'generator-vehicle-management': 'Vehicles',
+    'generator-vehicle-management': 'Vehicle Management',
+    'generator-vehicle-generation': 'Fleet Generation Dashboard',
   },
   vehicles: {
     vehicles: 'Vehicles',
