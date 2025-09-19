@@ -35,7 +35,6 @@ class VehicleCRUD {
     this.generationSubject = null;
   }
 
-  
   generateRequestProcessorMap() {
     return {
       'Vehicle': {
@@ -72,7 +71,7 @@ class VehicleCRUD {
   }
 
   /**  
-   * Gets the get Vehicle by id
+   * 
    *
    * @param {*} args args
    */
@@ -86,9 +85,7 @@ class VehicleCRUD {
   }
 
 
-  /**
-  * Create a Vehicle
-  */
+
   createVehicle$({ root, args, jwt }, authToken) {
     const aggregateId = uuidv4();
     const input = {
@@ -107,7 +104,6 @@ class VehicleCRUD {
     )
   }
 
-  
   updateVehicle$({ root, args, jwt }, authToken) {
     const { id, input, merge } = args;
 
@@ -123,7 +119,6 @@ class VehicleCRUD {
   }
 
 
-  
   deleteVehicles$({ root, args, jwt }, authToken) {
     const { ids } = args;
     return forkJoin(
@@ -171,7 +166,6 @@ class VehicleCRUD {
     );
   }
 
-  
   stopGeneration$({ root, args, jwt }, authToken) {
     if (!this.isGenerating) {
       return of({ code: 400, message: "Vehicle generation is not running" }).pipe(
@@ -204,7 +198,7 @@ class VehicleCRUD {
     );
   }
 
-  
+
   generateRandomVehicle() {
     const types = ['SUV', 'PickUp', 'Sedan', 'Hatchback', 'Coupe'];
     const powerSources = ['Electric', 'Gas', 'Hybrid', 'Diesel'];
@@ -218,7 +212,6 @@ class VehicleCRUD {
     };
   }
 
-  
   canonicalVehicle(data) {
     return {
       type: data.type,
@@ -229,7 +222,7 @@ class VehicleCRUD {
     };
   }
 
- 
+
   makeAid(data) {
     const canonical = this.canonicalVehicle(data);
     const str = JSON.stringify(canonical);
@@ -246,9 +239,16 @@ class VehicleCRUD {
       data: data
     };
 
+
     
     broker.send$(VEHICLE_GENERATION_TOPIC, 'VehicleGenerated', msg).subscribe();
     
+
+
+   
+    broker.send$(VEHICLE_GENERATION_TOPIC, 'VehicleGenerated', msg).subscribe();
+    
+   
 
     const websocketMsg = {
       type: 'VehicleGenerated',
@@ -263,7 +263,7 @@ class VehicleCRUD {
   }
 
   /**
-   * Generate an Modified event 
+   * 
    * @param {string} modType 'CREATE' | 'UPDATE' | 'DELETE'
    * @param {*} aggregateType 
    * @param {*} aggregateId 
