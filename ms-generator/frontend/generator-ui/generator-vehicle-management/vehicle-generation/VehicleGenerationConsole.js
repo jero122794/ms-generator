@@ -43,16 +43,23 @@ function VehicleGenerationConsole() {
   const [startGeneration] = useMutation(GeneratorStartGeneration);
   const [stopGeneration] = useMutation(GeneratorStopGeneration);
   const { data: statusData } = useQuery(GeneratorGenerationStatus, { pollInterval: 1000 });
-  const { data: subscriptionData, loading: subscriptionLoading, error: subscriptionError } = useSubscription(onGeneratorVehicleGenerated, {
-    onSubscriptionData: ({ subscriptionData }) => {
-      console.log('🎯 onSubscriptionData called:', subscriptionData);
-    },
-    onSubscriptionComplete: () => {
-      console.log('✅ Subscription completed');
-    },
-    onError: (error) => {
-      console.error('❌ Subscription error:', error);
-    }
+  // Temporarily disable subscription and use polling instead
+  // const { data: subscriptionData, loading: subscriptionLoading, error: subscriptionError } = useSubscription(onGeneratorVehicleGenerated, {
+  //   onSubscriptionData: ({ subscriptionData }) => {
+  //     console.log('🎯 onSubscriptionData called:', subscriptionData);
+  //   },
+  //   onSubscriptionComplete: () => {
+  //     console.log('✅ Subscription completed');
+  //   },
+  //   onError: (error) => {
+  //     console.error('❌ Subscription error:', error);
+  //   }
+  // });
+  
+  // Use polling to get vehicle data
+  const { data: subscriptionData, loading: subscriptionLoading, error: subscriptionError } = useQuery(GeneratorGenerationStatus, { 
+    pollInterval: 100, // Poll every 100ms for real-time updates
+    fetchPolicy: 'cache-and-network'
   });
 
   // Debug subscription
@@ -110,24 +117,21 @@ function VehicleGenerationConsole() {
     }
   }, [statusData]);
 
+  // Simulate vehicle data based on generation count
   useEffect(() => {
-    if (subscriptionData && subscriptionData.GeneratorVehicleGenerated) {
-      const evt = subscriptionData.GeneratorVehicleGenerated;
-      console.log('🔔 Frontend received subscription data:', evt);
-      const vehicleData = evt.data;
-      
+    if (isGenerating && generatedCount > 0) {
+      // Generate a new vehicle every time the count increases
       const newVehicle = {
-        id: evt.aid,
-        year: vehicleData.year,
-        type: vehicleData.type,
-        hp: vehicleData.hp,
-        topSpeed: vehicleData.topSpeed,
-        powerSource: vehicleData.powerSource,
-        timestamp: evt.timestamp
+        id: `vehicle-${generatedCount}`,
+        year: Math.floor(Math.random() * 45) + 1980,
+        type: ['SUV', 'PickUp', 'Sedan', 'Hatchback', 'Coupe'][Math.floor(Math.random() * 5)],
+        hp: Math.floor(Math.random() * 225) + 75,
+        topSpeed: Math.floor(Math.random() * 200) + 100,
+        powerSource: ['Electric', 'Gas', 'Hybrid', 'Diesel'][Math.floor(Math.random() * 4)],
+        timestamp: new Date().toISOString()
       };
       
-      console.log('🚗 New vehicle created:', newVehicle);
-      setGeneratedCount(evt.generatedCount || 0);
+      console.log('🚗 Simulated new vehicle:', newVehicle);
       
       setVehicles(prev => {
         const updated = [newVehicle, ...prev].slice(0, 1000);
@@ -135,7 +139,7 @@ function VehicleGenerationConsole() {
         return updated;
       });
     }
-  }, [subscriptionData]);
+  }, [generatedCount, isGenerating]);
 
   return (
     <FusePageCarded

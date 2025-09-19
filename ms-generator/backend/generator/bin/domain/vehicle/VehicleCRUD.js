@@ -35,14 +35,7 @@ class VehicleCRUD {
     this.generationSubject = null;
   }
 
-  /**     
-   * Generates and returns an object that defines the CQRS request handlers.
-   * 
-   * The map is a relationship of: AGGREGATE_TYPE VS { MESSAGE_TYPE VS  { fn: rxjsFunction, instance: invoker_instance } }
-   * 
-   * ## Example
-   *  { "CreateUser" : { "somegateway.someprotocol.mutation.CreateUser" : {fn: createUser$, instance: classInstance } } }
-   */
+  
   generateRequestProcessorMap() {
     return {
       'Vehicle': {
@@ -114,9 +107,7 @@ class VehicleCRUD {
     )
   }
 
-  /**
-   * updates an Vehicle 
-   */
+  
   updateVehicle$({ root, args, jwt }, authToken) {
     const { id, input, merge } = args;
 
@@ -132,9 +123,7 @@ class VehicleCRUD {
   }
 
 
-  /**
-   * deletes an Vehicle
-   */
+  
   deleteVehicles$({ root, args, jwt }, authToken) {
     const { ids } = args;
     return forkJoin(
@@ -154,9 +143,6 @@ class VehicleCRUD {
     );
   }
 
-  /**
-   * Start vehicle generation
-   */
   startGeneration$({ root, args, jwt }, authToken) {
     if (this.isGenerating) {
       return of({ code: 400, message: "Vehicle generation is already running" }).pipe(
@@ -185,9 +171,7 @@ class VehicleCRUD {
     );
   }
 
-  /**
-   * Stop vehicle generation
-   */
+  
   stopGeneration$({ root, args, jwt }, authToken) {
     if (!this.isGenerating) {
       return of({ code: 400, message: "Vehicle generation is not running" }).pipe(
@@ -209,9 +193,7 @@ class VehicleCRUD {
     );
   }
 
-  /**
-   * Get generation status
-   */
+  
   getGenerationStatus$({ root, args, jwt }, authToken) {
     return of({
       isGenerating: this.isGenerating,
@@ -222,9 +204,7 @@ class VehicleCRUD {
     );
   }
 
-  /**
-   * Generate random vehicle data
-   */
+  
   generateRandomVehicle() {
     const types = ['SUV', 'PickUp', 'Sedan', 'Hatchback', 'Coupe'];
     const powerSources = ['Electric', 'Gas', 'Hybrid', 'Diesel'];
@@ -238,9 +218,7 @@ class VehicleCRUD {
     };
   }
 
-  /**
-   * Create canonical vehicle data for aid calculation
-   */
+  
   canonicalVehicle(data) {
     return {
       type: data.type,
@@ -251,18 +229,13 @@ class VehicleCRUD {
     };
   }
 
-  /**
-   * Generate deterministic aid (hash) for vehicle data
-   */
+ 
   makeAid(data) {
     const canonical = this.canonicalVehicle(data);
     const str = JSON.stringify(canonical);
     return crypto.createHash('sha256').update(str).digest('hex');
   }
 
-  /**
-   * Publish vehicle generated event to MQTT and WebSocket
-   */
   publishVehicleGeneratedEvent(data) {
     const aid = this.makeAid(data);
     const msg = {
@@ -273,10 +246,10 @@ class VehicleCRUD {
       data: data
     };
 
-    // Publish to MQTT topic
+    
     broker.send$(VEHICLE_GENERATION_TOPIC, 'VehicleGenerated', msg).subscribe();
     
-    // Publish to WebSocket topic for frontend updates
+
     const websocketMsg = {
       type: 'VehicleGenerated',
       data: msg,
