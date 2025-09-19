@@ -2,6 +2,7 @@ export default {
   navigation: {
     'settings': 'Configuraciones',
     'generator-vehicle-management': 'Vehicles',
+    'generator-vehicle-generation': 'Dashboard de Generación ',
   },
   vehicles: {
     vehicles: 'Vehicles',

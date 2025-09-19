@@ -1,8 +1,9 @@
 "use strict";
 
 const uuidv4 = require("uuid/v4");
-const { of, forkJoin, from, iif, throwError } = require("rxjs");
-const { mergeMap, catchError, map, toArray, pluck } = require('rxjs/operators');
+const { of, forkJoin, from, iif, throwError, interval, Subject } = require("rxjs");
+const { mergeMap, catchError, map, toArray, pluck, takeUntil, tap } = require('rxjs/operators');
+const crypto = require('crypto');
 
 const Event = require("@nebulae/event-store").Event;
 const { CqrsResponseHelper } = require('@nebulae/backend-node-tools').cqrs;
@@ -18,6 +19,8 @@ const READ_ROLES = ["VEHICLE_READ"];
 const WRITE_ROLES = ["VEHICLE_WRITE"];
 const REQUIRED_ATTRIBUTES = [];
 const MATERIALIZED_VIEW_TOPIC = "generator-ui-gateway-materialized-view-updates";
+const VEHICLE_GENERATION_TOPIC = "fleet/vehicles/generated";
+const WEBSOCKET_TOPIC = "generator-ui-gateway-websocket-updates";
 
 /**
  * Singleton instance
@@ -27,24 +30,23 @@ let instance;
 
 class VehicleCRUD {
   constructor() {
+    this.isGenerating = false;
+    this.generatedCount = 0;
+    this.generationSubject = null;
   }
 
-  /**     
-   * Generates and returns an object that defines the CQRS request handlers.
-   * 
-   * The map is a relationship of: AGGREGATE_TYPE VS { MESSAGE_TYPE VS  { fn: rxjsFunction, instance: invoker_instance } }
-   * 
-   * ## Example
-   *  { "CreateUser" : { "somegateway.someprotocol.mutation.CreateUser" : {fn: createUser$, instance: classInstance } } }
-   */
+  
   generateRequestProcessorMap() {
     return {
       'Vehicle': {
         "generator-uigateway.graphql.query.GeneratorVehicleListing": { fn: instance.getGeneratorVehicleListing$, instance, jwtValidation: { roles: READ_ROLES, attributes: REQUIRED_ATTRIBUTES } },
         "generator-uigateway.graphql.query.GeneratorVehicle": { fn: instance.getVehicle$, instance, jwtValidation: { roles: READ_ROLES, attributes: REQUIRED_ATTRIBUTES } },
+        "generator-uigateway.graphql.query.GeneratorGenerationStatus": { fn: instance.getGenerationStatus$, instance, jwtValidation: { roles: READ_ROLES, attributes: REQUIRED_ATTRIBUTES } },
         "generator-uigateway.graphql.mutation.GeneratorCreateVehicle": { fn: instance.createVehicle$, instance, jwtValidation: { roles: WRITE_ROLES, attributes: REQUIRED_ATTRIBUTES } },
         "generator-uigateway.graphql.mutation.GeneratorUpdateVehicle": { fn: instance.updateVehicle$, jwtValidation: { roles: WRITE_ROLES, attributes: REQUIRED_ATTRIBUTES } },
         "generator-uigateway.graphql.mutation.GeneratorDeleteVehicles": { fn: instance.deleteVehicles$, jwtValidation: { roles: WRITE_ROLES, attributes: REQUIRED_ATTRIBUTES } },
+        "generator-uigateway.graphql.mutation.GeneratorStartGeneration": { fn: instance.startGeneration$, instance, jwtValidation: { roles: WRITE_ROLES, attributes: REQUIRED_ATTRIBUTES } },
+        "generator-uigateway.graphql.mutation.GeneratorStopGeneration": { fn: instance.stopGeneration$, instance, jwtValidation: { roles: WRITE_ROLES, attributes: REQUIRED_ATTRIBUTES } },
       }
     }
   };
@@ -105,9 +107,7 @@ class VehicleCRUD {
     )
   }
 
-  /**
-   * updates an Vehicle 
-   */
+  
   updateVehicle$({ root, args, jwt }, authToken) {
     const { id, input, merge } = args;
 
@@ -123,9 +123,7 @@ class VehicleCRUD {
   }
 
 
-  /**
-   * deletes an Vehicle
-   */
+  
   deleteVehicles$({ root, args, jwt }, authToken) {
     const { ids } = args;
     return forkJoin(
@@ -145,6 +143,124 @@ class VehicleCRUD {
     );
   }
 
+  startGeneration$({ root, args, jwt }, authToken) {
+    if (this.isGenerating) {
+      return of({ code: 400, message: "Vehicle generation is already running" }).pipe(
+        mergeMap(response => CqrsResponseHelper.buildSuccessResponse$(response))
+      );
+    }
+
+    ConsoleLogger.i("Starting vehicle generation...");
+    this.isGenerating = true;
+    this.generatedCount = 0;
+    
+    const stopSubject = new Subject();
+    this.generationSubject = stopSubject;
+
+    interval(50).pipe(
+      takeUntil(stopSubject),
+      tap(() => {
+        const vehicleData = this.generateRandomVehicle();
+        this.generatedCount++;
+        this.publishVehicleGeneratedEvent(vehicleData);
+      })
+    ).subscribe();
+
+    return of({ code: 200, message: "Vehicle generation started" }).pipe(
+      mergeMap(response => CqrsResponseHelper.buildSuccessResponse$(response))
+    );
+  }
+
+  
+  stopGeneration$({ root, args, jwt }, authToken) {
+    if (!this.isGenerating) {
+      return of({ code: 400, message: "Vehicle generation is not running" }).pipe(
+        mergeMap(response => CqrsResponseHelper.buildSuccessResponse$(response))
+      );
+    }
+
+    ConsoleLogger.i("Stopping vehicle generation...");
+    this.isGenerating = false;
+    
+    if (this.generationSubject) {
+      this.generationSubject.next();
+      this.generationSubject.complete();
+      this.generationSubject = null;
+    }
+
+    return of({ code: 200, message: "Vehicle generation stopped" }).pipe(
+      mergeMap(response => CqrsResponseHelper.buildSuccessResponse$(response))
+    );
+  }
+
+  
+  getGenerationStatus$({ root, args, jwt }, authToken) {
+    return of({
+      isGenerating: this.isGenerating,
+      generatedCount: this.generatedCount,
+      status: this.isGenerating ? "Running" : "Stopped"
+    }).pipe(
+      mergeMap(response => CqrsResponseHelper.buildSuccessResponse$(response))
+    );
+  }
+
+  
+  generateRandomVehicle() {
+    const types = ['SUV', 'PickUp', 'Sedan', 'Hatchback', 'Coupe'];
+    const powerSources = ['Electric', 'Gas', 'Hybrid', 'Diesel'];
+    
+    return {
+      type: types[Math.floor(Math.random() * types.length)],
+      powerSource: powerSources[Math.floor(Math.random() * powerSources.length)],
+      hp: Math.floor(Math.random() * 225) + 75, // 75-300 HP
+      year: Math.floor(Math.random() * 45) + 1980, // 1980-2024
+      topSpeed: Math.floor(Math.random() * 200) + 100 // 100-300 km/h
+    };
+  }
+
+  
+  canonicalVehicle(data) {
+    return {
+      type: data.type,
+      powerSource: data.powerSource,
+      hp: data.hp,
+      year: data.year,
+      topSpeed: data.topSpeed
+    };
+  }
+
+ 
+  makeAid(data) {
+    const canonical = this.canonicalVehicle(data);
+    const str = JSON.stringify(canonical);
+    return crypto.createHash('sha256').update(str).digest('hex');
+  }
+
+  publishVehicleGeneratedEvent(data) {
+    const aid = this.makeAid(data);
+    const msg = {
+      at: 'Vehicle',
+      et: 'Generated',
+      aid: aid,
+      timestamp: new Date().toISOString(),
+      data: data
+    };
+
+    
+    broker.send$(VEHICLE_GENERATION_TOPIC, 'VehicleGenerated', msg).subscribe();
+    
+
+    const websocketMsg = {
+      type: 'VehicleGenerated',
+      data: msg,
+      generatedCount: this.generatedCount
+    };
+    
+    console.log('📤 Backend sending WebSocket message:', websocketMsg);
+    broker.send$(WEBSOCKET_TOPIC, 'VehicleGenerated', websocketMsg).subscribe();
+
+    ConsoleLogger.i(`🚗 Vehicle generated: ${aid.substring(0, 8)}... - Total: ${this.generatedCount}`);
+  }
 
   /**
    * Generate an Modified event 
